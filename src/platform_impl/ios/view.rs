@@ -4,6 +4,7 @@
 
 use std::{collections::HashMap, ffi::c_char};
 
+use cocoa::foundation::{NSDictionary, NSString, NSArray};
 use objc::{
   declare::ClassDecl,
   runtime::{Class, Object, Sel, BOOL, NO, YES},
@@ -597,6 +598,32 @@ pub fn create_delegate_class() {
   extern "C" fn will_enter_foreground(_: &Object, _: Sel, _: id) {}
   extern "C" fn did_enter_background(_: &Object, _: Sel, _: id) {}
 
+  extern "C" fn did_register_for_remote_notifications_with_device_token(s: &Object, _: Sel, _: id, deviceToken: id) {
+    unsafe {
+      let notification_center: &Object = msg_send![class!(NSNotificationCenter), defaultCenter];
+      let notification_name = NSString::alloc(nil).init_str("didRegisterApnToken");
+      let _: () = msg_send![
+          notification_center,
+          postNotificationName: notification_name
+          object: deviceToken
+          userInfo: deviceToken
+      ];
+    }
+  }
+
+  extern "C" fn did_fail_to_register_for_remote_notifications_with_error(s: &Object, _: Sel, _: id, error: id) {
+    unsafe {
+      let notification_center: &Object = msg_send![class!(NSNotificationCenter), defaultCenter];
+      let notification_name = NSString::alloc(nil).init_str("failedToRegisterApnToken");
+      let _: () = msg_send![
+          notification_center,
+          postNotificationName: notification_name
+          object: error
+          userInfo: error
+      ];
+    }
+  }
+
   extern "C" fn will_terminate(_: &Object, _: Sel, _: id) {
     unsafe {
       let app: id = msg_send![class!(UIApplication), sharedApplication];
@@ -653,11 +680,19 @@ pub fn create_delegate_class() {
       did_enter_background as extern "C" fn(&Object, Sel, id),
     );
 
-    decl.add_method(
-      sel!(applicationWillTerminate:),
-      will_terminate as extern "C" fn(&Object, Sel, id),
-    );
+        decl.add_method(
+            sel!(applicationWillTerminate:),
+            will_terminate as extern "C" fn(&Object, Sel, id),
+        );
 
+        decl.add_method(
+          sel!(application:didRegisterForRemoteNotificationsWithDeviceToken:),
+          did_register_for_remote_notifications_with_device_token as extern "C" fn(&Object, Sel, id, id),
+        );
+        decl.add_method(
+          sel!(application:didFailToRegisterForRemoteNotificationsWithError:),
+          did_fail_to_register_for_remote_notifications_with_error as extern "C" fn(&Object, Sel, id, id),
+        );
     decl.register();
   }
 }
